@@ -46,7 +46,6 @@ class ViewController: UIViewController, AVAudioPlayerDelegate {
     
     //오디오 재생을 위한 초기화함수
     //viewDidLoad 함수에 작성해도 되지만 나중에 재생모드, 녹음모드로 변경할때를 대비해 오디오 재생 초기화 과정과 녹음 초기화 과정을 분리해 놔야 편하다.
-
     func initPlay(){
         // do-try-catch -> 오류가 발생할 수 있는 함수를 호출할때 사용
         do {
