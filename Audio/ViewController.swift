@@ -24,7 +24,8 @@ class ViewController: UIViewController, AVAudioPlayerDelegate {
     var progressTimer : Timer!
     // 타이머를 위한 변수
     
-    
+    let timePlayerSelector = #selector(ViewController.updatePlayTime)
+    // 재생타이머를 위한 상수
 
     @IBOutlet var pvProgressPlay: UIProgressView!
     @IBOutlet var lblCurrnetTime: UILabel!
@@ -113,6 +114,17 @@ class ViewController: UIViewController, AVAudioPlayerDelegate {
         audioPlayer.play()
         //play 버튼은 비활성화, 나머지 버튼은 활성화
         setPlayButtons(false, pause: true, stop: true)
+        
+        //프로그레스 타이머에 TimerscheduledTimer 함수를 사용하요 0.1초 간격으로 타이머를 생성하도록 구현
+        progressTimer = Timer.scheduledTimer(timeInterval: 0.1, target: self, selector: timePlayerSelector, userInfo: nil, repeats: true)
+        
+    }
+    
+    @objc func updatePlayTime() {
+        // 재생시간인 audioPlayer.currentTime을 레이블 lblCurrentTime에 나타낸다
+        lblCurrnetTime.text = convertNSTimeInterval2String(audioPlayer.currentTime)
+        // 프로그레스 뷰인 pvProgres Play의 진행상황에 audioPlayer.currentTime을 audioPlayer.duration으로 나눈 값을 표시
+        pvProgressPlay.progress = Float(audioPlayer.currentTime/audioPlayer.duration)
     }
     
     @IBAction func btnPauseAudio(_ sender: UIButton) {
@@ -125,9 +137,29 @@ class ViewController: UIViewController, AVAudioPlayerDelegate {
         //오디오 정지하기
         
         audioPlayer.stop()
+        
+        //정지했을 때 시간이 00:00이 되도록
+        // 오디오를 정지하고 다시 재생하면 처음부터 재생해야 하므로 audioPlayer.currentTime을 0으로
+        audioPlayer.currentTime = 0
+        // 재생 시간도 00:00으로 초기화 하기 위해 convertNSTimeInterval2String(0) 이용
+        lblCurrnetTime.text = convertNSTimeInterval2String(0)
+        
         setPlayButtons(true, pause: false, stop: false)
+        
+        //타이머 무효화
+        progressTimer.invalidate()
     }
     @IBAction func slChangeVolume(_ sender: UISlider) {
+        //볼륨조절하기 슬라이더를 ㅊ터치해 좌우로 움직이면 볼륨이 조절되도록한다,
+        audioPlayer.volume = slVolume.value
+    }
+    
+    
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        //타이머를 무효화 한다
+        progressTimer.invalidate()
+        // play 버튼은 활성화 나머지버튼은 비활성화
+        setPlayButtons(true, pause: false, stop: false)
     }
     
 }
