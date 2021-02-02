@@ -10,7 +10,13 @@ import UIKit
 import AVFoundation
 
 // 오디오를 재생하려면 AVAudioPlayerDelegate가 필요하기때문에 선언을 추가해준다
-class ViewController: UIViewController, AVAudioPlayerDelegate {
+class ViewController: UIViewController, AVAudioPlayerDelegate, AVAudioRecorderDelegate {
+    
+    var imgPlay: UIImage?
+    var imgRecord: UIImage?
+    var imgStop: UIImage?
+    var imgPause: UIImage?
+    
     
     var audioPlayer : AVAudioPlayer!
     // AVAudioPlater 인스턴스변수
@@ -26,7 +32,11 @@ class ViewController: UIViewController, AVAudioPlayerDelegate {
     
     let timePlayerSelector = #selector(ViewController.updatePlayTime)
     // 재생타이머를 위한 상수
-
+    
+    let timeRecordSelector:Selector = #selector(ViewController.updateRecordTime)
+    // 녹음 타이머를 위한 상수 추가
+    
+    
     @IBOutlet var pvProgressPlay: UIProgressView!
     @IBOutlet var lblCurrnetTime: UILabel!
     @IBOutlet var lblEndTime: UILabel!
@@ -35,15 +45,102 @@ class ViewController: UIViewController, AVAudioPlayerDelegate {
     @IBOutlet var btnStop: UIButton!
     @IBOutlet var slVolume: UISlider!
     
+    @IBOutlet var btnRecord: UIButton!
+    @IBOutlet var lblRecordTime: UILabel!
+    
+    @IBOutlet var imgView: UIImageView!
+    //adudioRecorder라는 인스턴스 추가
+    var audioRecorder : AVAudioRecorder!
+    //현재 녹음모드 라는 것을 나타낼 isRecordMode 추가, 기본값은 false로 하여
+    //처음 앱을 실행했을때 녹음모드가 아닌 재생모드가 나타나게 한다.
+    var isRecordMod = false
+    
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         // Do any additional setup after loading the view.
         
-        // audioFile 변수를 추가해준 mp3로 설정
-        audioFile = Bundle.main.url(forResource: "Sicilian_Breeze", withExtension: "mp3")
+        imgPlay = UIImage(named: "play.png")
+        imgPause = UIImage(named: "pause.png")
+        imgStop = UIImage(named: "stop.png")
+        imgRecord = UIImage(named: "record.png")
         
-        initPlay()
+        imgView.image = imgStop
+        
+        selectAudioFile()
+        
+        if !isRecordMod {
+            // 녹음모드가 아니고 재생모드이기때문에 initPalay함수 호출
+            initPlay()
+            //조건에 해당하는 것이 재생모드이므로 Record버튼과 재생 시간은 비활성화
+            btnRecord.isEnabled = false
+            lblRecordTime.isEnabled = false
+        } else {
+            // 녹음모드이기 때문에 initRecord함수 호출
+            initRecord()
+        }
     }
+    
+    //녹음파일 생성하기
+    func selectAudioFile() {
+        if !isRecordMod {
+            // 녹음모드가 아닐때  재생모드일때 오디오 파일인   Sicilian_Breeze.mp3가 선택됨
+                
+            // audioFile 변수를 추가해준 mp3로 설정
+            audioFile = Bundle.main.url(forResource: "Sicilian_Breeze", withExtension: "mp3")
+        } else {
+            // 녹음모드일때
+            // 새파일인 recordFile.m4a가 생성됨
+            let documentDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            audioFile = documentDirectory.appendingPathComponent("recordFile.m4a")
+        }
+    }
+    
+    //녹음을 위한 초기화 함수 (녹음과 관련하여 오디오의 포맷, 음질, 비트율, 채널 ㅁ치 샘플률을 초기화 하기위함)
+    func initRecord() {
+        // 포멧은 Apple Lossless, 음질은 최대, 비트율은 320,000bps(320kbps), 오디오 채널은 2로 하고 샘플률은 44100Hz로 설정
+        let recordSettings = [
+            AVFormatIDKey : NSNumber(value: kAudioFormatAppleLossless as UInt32),
+            AVEncoderAudioQualityKey : AVAudioQuality.max.rawValue,
+            AVEncoderBitRateKey : 320000,
+            AVNumberOfChannelsKey : 2,
+            AVSampleRateKey : 44100.0] as [String : Any]
+        
+        
+        // aduioFile을 URL로 하는 audioRecorder인스턴스를 생성
+        do {
+            audioRecorder = try AVAudioRecorder(url: audioFile, settings: recordSettings)
+        } catch let error as NSError {
+            print("Error-initRecord : \(error)")
+        }
+        
+        //audioRecorder의 델리게이트를 self로 설정
+        audioRecorder.delegate = self
+        //볼륨 슬라이더 값을 1.0으로 설정
+        slVolume.value = 1.0
+        //audioPlayer의 볼륨도 슬라이더 값과 동일한 1.0으로 설정
+        audioPlayer.volume = slVolume.value
+        //총 재생시간을 0으로 바꿈
+        lblEndTime.text = convertNSTimeInterval2String(0)
+        //play, pause, stop 버튼을 비활성화로 설정
+        setPlayButtons(false, pause: false, stop: false)
+        
+        
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch let error as NSError {
+            print("Error-setCategory: \(error)")
+        }
+        do {
+            try session.setActive(true)
+        } catch let error as NSError {
+            print("Error-setActive : \(error)")
+        }
+    }
+    
+    
     
     //오디오 재생을 위한 초기화함수
     //viewDidLoad 함수에 작성해도 되지만 나중에 재생모드, 녹음모드로 변경할때를 대비해 오디오 재생 초기화 과정과 녹음 초기화 과정을 분리해 놔야 편하다.
@@ -115,6 +212,8 @@ class ViewController: UIViewController, AVAudioPlayerDelegate {
         //play 버튼은 비활성화, 나머지 버튼은 활성화
         setPlayButtons(false, pause: true, stop: true)
         
+        imgView.image = imgPlay
+        
         //프로그레스 타이머에 TimerscheduledTimer 함수를 사용하요 0.1초 간격으로 타이머를 생성하도록 구현
         progressTimer = Timer.scheduledTimer(timeInterval: 0.1, target: self, selector: timePlayerSelector, userInfo: nil, repeats: true)
         
@@ -132,6 +231,7 @@ class ViewController: UIViewController, AVAudioPlayerDelegate {
         
         audioPlayer.pause()
         setPlayButtons(true, pause: false, stop: true)
+        imgView.image = imgPause
     }
     @IBAction func btnStopAudio(_ sender: UIButton) {
         //오디오 정지하기
@@ -145,6 +245,8 @@ class ViewController: UIViewController, AVAudioPlayerDelegate {
         lblCurrnetTime.text = convertNSTimeInterval2String(0)
         
         setPlayButtons(true, pause: false, stop: false)
+        
+        imgView.image = imgStop
         
         //타이머 무효화
         progressTimer.invalidate()
@@ -161,6 +263,63 @@ class ViewController: UIViewController, AVAudioPlayerDelegate {
         // play 버튼은 활성화 나머지버튼은 비활성화
         setPlayButtons(true, pause: false, stop: false)
     }
+    
+    
+    @IBAction func swRecordMode(_ sender: UISwitch) {
+        if sender.isOn {
+            //스위치가 On이 되었을 때는 녹음 모드 이므로 오디오 재생을 중지하고, 현재 재생 시간을 00:00으로 만들고
+            //isRecordMode의 값을 참(true)으로 설정하고, record 버튼과 녹음 시간을 활성화로 설정
+            audioPlayer.stop()
+            audioPlayer.currentTime = 0
+            lblRecordTime!.text = convertNSTimeInterval2String(0)
+            isRecordMod = true
+            btnRecord.isEnabled = true
+            lblRecordTime.isEnabled = true
+        } else {
+            //스위치가 ON이 아닐때, 즉 재생모드일 때는 isRecordMode의 값을 거짓(false)로 설정하고
+            //record 버튼과 녹음 시간을 비활성화 하면, 녹음시간은 0으로 초기화한다.
+            isRecordMod = false
+            btnRecord.isEnabled = false
+            lblRecordTime.isEnabled = false
+            lblRecordTime.text = convertNSTimeInterval2String(0)
+        }
+        //selectAudioFile 함수를 호출하여 오디오 파일을 선택하고, 모드에 따라 초기화 할 함수를 호출
+        selectAudioFile()
+        if !isRecordMod {
+             initPlay()
+        } else {
+            initRecord()
+        }
+    }
+    
+    @IBAction func btnRecord(_ sender: UIButton) {
+       
+        if (sender as AnyObject).titleLabel?.text == "Record" {
+            //만약에 버튼 이름이 Record이면 녹음을 하고 버튼 이름을 Stop으로 변경
+            audioRecorder.record()
+            (sender as AnyObject).setTitle("Stop", for: UIControl.State())
+                // 녹음할 때 타이머가 작동하도록 progressTimer에 Time.scheduledTimer 함수를 호출하는데 0.1초 간격으로 타이머 생성
+                progressTimer = Timer.scheduledTimer(timeInterval: 0.1, target: self, selector: timeRecordSelector, userInfo: nil, repeats: true)
+            imgView.image = imgRecord
+        } else {
+            //그렇지 않으면 현재 녹음 중이므로 녹음을 중단하고 버튼 이름을 Stop 으로 변경
+            // 그리고 Play 버튼을 활성화하고 방금 녹음한 파일로 재생을 초기화한다
+            audioRecorder.stop()
+                // 녹음이 중지되면 타이머를 무효화
+                progressTimer.invalidate()
+            (sender as AnyObject).setTitle("Record", for: UIControl.State())
+            btnPlay.isEnabled = true
+            initPlay()
+            imgView.image = imgStop
+            
+        }
+    }
+    
+    // updateRecordTime 함수 생성, 타이머에 의해 0.1초 간격으로 이 함수를 실행하는데, 그 때마다 녹음시간이 표시됨
+    @objc func updateRecordTime() {
+        lblRecordTime.text = convertNSTimeInterval2String(audioRecorder.currentTime)
+    }
+    
     
 }
 
